@@ -140,21 +140,65 @@ with tab3:
     st.write("**Alan Adı Bağlantısı:** isg.mertuspatronus.com (Cloudflare üzerinden şifreli, VPS bağlantısı yok)")
     st.info(f"Mevcut Radar Durumu: {radar_status['message']}")
 
-# 4. Hekim - Mentor Sohbet Arayüzü
+# 4. Hekim - Mentor Sohbet Arayüzü (Hafıza Entegreli)
 st.markdown("---")
 st.subheader("🤖 İSG Mentor ile Konuş")
+
+# Hafıza başlatma (Session State) ve Supabase'den geçmişi çekme
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+    if supabase:
+        try:
+            # Önceki sohbetleri veritabanından çek (Son 10 mesaj)
+            res = supabase.table("chat_history").select("*").order("created_at", desc=False).limit(10).execute()
+            if res.data:
+                for row in res.data:
+                    st.session_state.messages.append({"role": row["role"], "content": row["content"]})
+        except Exception:
+            pass
+
+# Ekrandaki eski mesajları çiz
+for msg in st.session_state.messages:
+    st.chat_message(msg["role"]).write(msg["content"])
+
 user_input = st.chat_input("6331 sayılı kanun veya klinik tuzaklar hakkında sor...")
 
 if user_input:
+    # Kullanıcı mesajını ekrana bas ve hafızaya al
     st.chat_message("user").write(user_input)
+    st.session_state.messages.append({"role": "user", "content": user_input})
+    
+    # Veritabanına kaydet
+    if supabase:
+        try:
+            supabase.table("chat_history").insert({"role": "user", "content": user_input}).execute()
+        except Exception:
+            pass
+
     if client:
         try:
-            # Yeni nesil genai client ile prompt gönderimi
+            # Geçmiş konuşmaları bağlam (context) olarak Gemini'ye sunmak için birleştir
+            context = "Sen bir İş Yeri Hekimliği AI mentorusun. Sadece 6331 sayılı İSG kanunu ve tıbbi mevzuat çerçevesinde net, kısa ve profesyonel cevap ver.\n\nÖnceki Konuşmalar:\n"
+            for m in st.session_state.messages[-5:]: # Son 5 mesajı bağlama ekle ki konuyu hatırlasın
+                context += f"{m['role'].capitalize()}: {m['content']}\n"
+            context += f"\nGüncel Soru: {user_input}"
+
             response = client.models.generate_content(
                 model='gemini-1.5-flash',
-                contents=f"Sen bir İş Yeri Hekimliği AI mentorusun. Sadece 6331 sayılı İSG kanunu ve tıbbi mevzuat çerçevesinde net, kısa ve profesyonel cevap ver. Soru: {user_input}"
+                contents=context
             )
-            st.chat_message("assistant").write(response.text)
+            
+            bot_reply = response.text
+            st.chat_message("assistant").write(bot_reply)
+            st.session_state.messages.append({"role": "assistant", "content": bot_reply})
+            
+            # Asistan cevabını veritabanına kaydet
+            if supabase:
+                try:
+                    supabase.table("chat_history").insert({"role": "assistant", "content": bot_reply}).execute()
+                except Exception:
+                    pass
+                    
         except Exception as e:
             st.chat_message("assistant").error(f"Gemini API Hatası: {e}")
     else:
