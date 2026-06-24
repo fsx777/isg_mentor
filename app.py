@@ -1,7 +1,7 @@
 import streamlit as st
 import datetime
 import os
-from google import genai
+import google.generativeai as genai
 from supabase import create_client, Client
 
 # İŞ YERİ HEKİMLİĞİ AI AJANI - PROTOKOL v4.0 (TAM OTONOM İSG MENTORU)
@@ -14,16 +14,16 @@ st.set_page_config(
     layout="wide"
 )
 
-# Gemini API Yapılandırması (Yeni google-genai kütüphanesi ile güncellendi)
+# Gemini API Yapılandırması (Klasik google-generativeai kütüphanesi ile güncellendi)
 # Streamlit dış bulutunda (Community Cloud) st.secrets kullanılacak.
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+client_available = False
 if GEMINI_API_KEY:
     try:
-        client = genai.Client(api_key=GEMINI_API_KEY)
+        genai.configure(api_key=GEMINI_API_KEY)
+        client_available = True
     except Exception as e:
-        client = None
-else:
-    client = None
+        pass
 
 # Supabase (Hafıza) Yapılandırması
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
@@ -175,7 +175,7 @@ if user_input:
         except Exception:
             pass
 
-    if client:
+    if client_available:
         try:
             # Geçmiş konuşmaları bağlam (context) olarak Gemini'ye sunmak için birleştir
             context = "Sen bir İş Yeri Hekimliği AI mentorusun. Sadece 6331 sayılı İSG kanunu ve tıbbi mevzuat çerçevesinde net, kısa ve profesyonel cevap ver.\n\nÖnceki Konuşmalar:\n"
@@ -183,18 +183,15 @@ if user_input:
                 context += f"{m['role'].capitalize()}: {m['content']}\n"
             context += f"\nGüncel Soru: {user_input}"
 
-            # Akıllı Motor Seçici (Fallback Loop)
+            # Akıllı Motor Seçici (Fallback Loop) - Klasik SDK versiyonu
             calisan_model = None
             hata_mesaji = ""
-            # En hafif, hızlı ve ücretsizden (8b) başlayarak kararlı eski sürüme doğru dener
-            modeller_listesi = ["gemini-1.5-flash-8b", "gemini-1.0-pro", "gemini-1.5-flash"]
+            modeller_listesi = ["gemini-1.5-flash", "gemini-1.5-flash-8b", "gemini-pro"]
             
             for denenen_model in modeller_listesi:
                 try:
-                    response = client.models.generate_content(
-                        model=denenen_model,
-                        contents=context
-                    )
+                    model = genai.GenerativeModel(denenen_model)
+                    response = model.generate_content(context)
                     calisan_model = denenen_model
                     break  # Cevap alındıysa döngüyü kır
                 except Exception as e:
