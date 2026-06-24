@@ -37,21 +37,34 @@ else:
 # 2. ÖSYM Radarı ve İvedi Uyarı Sistemi (Bürokratik Takip)
 def check_osym_radar():
     """
-    GitHub Actions veya Supabase üzerinden güncellenen ÖSYM takvimini çeker.
+    Supabase üzerinden güncellenen ÖSYM takvimini çeker.
     """
-    if supabase:
-        try:
-            # TODO: 'osym_radar' tablosundan son durumu çekecek asıl sorgu buraya gelecek
-            # response = supabase.table('osym_radar').select('*').limit(1).execute()
-            pass
-        except Exception as e:
-            pass
-            
-    return {
-        "status": "NORMAL", # Durum "KIRMIZI_ALARM" olursa sistem kilitlenir.
+    radar_data = {
+        "status": "NORMAL",
         "message": "13 Aralık 2026 İSG/2 Sınav Duyurusu İzleniyor.",
         "deadline": None
     }
+
+    if supabase:
+        try:
+            # osym_radar tablosundan en son eklenen kaydı çek
+            response = supabase.table('osym_radar').select('*').order('created_at', desc=True).limit(1).execute()
+            if response.data:
+                veri = response.data[0]
+                durum = veri.get("durum", "")
+                mesaj = veri.get("mesaj", "")
+                
+                # Eğer durum "Kırmızı" ise sistemi kilitler
+                if "Kırmızı" in durum:
+                    radar_data["status"] = "KIRMIZI_ALARM"
+                
+                radar_data["message"] = f"{durum} - {mesaj}"
+        except Exception as e:
+            radar_data["message"] = f"Supabase Bağlantı Hatası: {str(e)}"
+    else:
+        radar_data["message"] = "Supabase bağlantısı bekleniyor."
+
+    return radar_data
 
 radar_status = check_osym_radar()
 
@@ -94,18 +107,18 @@ tab1, tab2, tab3 = st.tabs(["📚 Günlük Eğitim Programı", "🎯 Eksik Kapat
 with tab1:
     st.header("Günlük İlerleme ve Adaptif Notlar")
     st.write("GitHub Actions tarafından taranıp, 6331 ve 4857 mevzuat filtresinden geçen temiz veriler burada olacak.")
-    
+
     # --- İLERLEME ÇUBUKLARI (Yeni Eklenen Görsel Modül) ---
     st.subheader("Modül İlerlemeleri")
     st.write("6331 Sayılı Kanun ve Mevzuat")
     st.progress(65)
     st.write("İş Yeri Hekimliği Klinik Tuzaklar")
     st.progress(40)
-    
+
 with tab2:
     st.header("Meydan Okuma (Ters Köşe Sorular)")
     st.write("Çelişkili 'Şüpheli' notlar veya 3-4 gün önce işlenen konulardan gelen ters köşe testler.")
-    
+
     # --- MEYDAN OKUMA KARTLARI (Yeni Eklenen Görsel Modül) ---
     with st.expander("⚠️ Şüpheli Not: Gece Çalışma Süreleri ve Kadın İşçiler"):
         st.warning("Bu bilgi son taramada çelişkili bulundu. Lütfen mevzuatı doğrula.")
@@ -146,4 +159,3 @@ if user_input:
             st.chat_message("assistant").error(f"Gemini API Hatası: {e}")
     else:
         st.chat_message("assistant").error("Sistem Uyarısı: GEMINI_API_KEY çevresel değişkeni bulunamadı. Lütfen dış bulut ayarlarından veya terminalden anahtarı tanımla.")
-
