@@ -119,7 +119,7 @@ with tab2:
     st.header("Meydan Okuma (Ters Köşe Sorular)")
     st.write("Çelişkili 'Şüpheli' notlar veya 3-4 gün önce işlenen konulardan gelen ters köşe testler.")
 
-    # --- MEYDAN OKUMA KARTLARI (Yeni Eklenen Görsel Modül) ---
+    # --- MEY उद्यमUMA KARTLARI (Yeni Eklenen Görsel Modül) ---
     with st.expander("⚠️ Şüpheli Not: Gece Çalışma Süreleri ve Kadın İşçiler"):
         st.warning("Bu bilgi son taramada çelişkili bulundu. Lütfen mevzuatı doğrula.")
         st.write("**Gelen Veri:** Kadın işçiler gece postasında 7.5 saatten fazla çalıştırılamaz. (Turizm sektörü hariç)")
@@ -143,25 +143,6 @@ with tab3:
 # 4. Hekim - Mentor Sohbet Arayüzü (Hafıza Entegreli)
 st.markdown("---")
 st.subheader("🤖 İSG Mentor ile Konuş")
-
-# --- X-RAY (RÖNTGEN) MODÜLÜ ---
-if client_available:
-    with st.expander("🔍 Sistem Röntgeni: API Anahtarına Tanımlı Açık Modeller"):
-        try:
-            acik_modeller = []
-            for m in genai.list_models():
-                if 'generateContent' in m.supported_generation_methods:
-                    acik_modeller.append(m.name)
-            
-            if acik_modeller:
-                st.write("Google'ın bu projede sana kullanma izni verdiği üretim motorları:")
-                for model_ismi in acik_modeller:
-                    st.code(model_ismi)
-            else:
-                st.warning("Bu şifreye tanımlı hiçbir metin motoru bulunamadı!")
-        except Exception as e:
-            st.error(f"Modeller taranamadı: {e}")
-# ------------------------------
 
 # Hafıza başlatma (Session State) ve Supabase'den geçmişi çekme
 if "messages" not in st.session_state:
@@ -202,10 +183,10 @@ if user_input:
                 context += f"{m['role'].capitalize()}: {m['content']}\n"
             context += f"\nGüncel Soru: {user_input}"
 
-            # Sadece 1.5-flash motoru ile test amaçlı hata ayıklama modu
+            # Yeni nesil açık motorlar ile fallback döngüsü
             calisan_model = None
             hata_mesaji = ""
-            modeller_listesi = ["gemini-1.5-flash"]
+            modeller_listesi = ["gemini-2.5-flash", "gemini-flash-latest"]
             
             for denenen_model in modeller_listesi:
                 try:
@@ -229,7 +210,7 @@ if user_input:
                     except Exception:
                         pass
             else:
-                st.chat_message("assistant").error(f"API Hatası (1.5-flash Çıplak Çıktı): {hata_mesaji}")
+                st.chat_message("assistant").error(f"API Hatası (Yeni Nesil Motorlar): {hata_mesaji}")
                     
         except Exception as e:
             st.chat_message("assistant").error(f"Sistem Hatası: {e}")
