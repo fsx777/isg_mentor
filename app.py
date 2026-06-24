@@ -184,7 +184,7 @@ if user_input:
             context += f"\nGüncel Soru: {user_input}"
 
             response = client.models.generate_content(
-                model='gemini-1.5-pro',
+                model='gemini-pro',
                 contents=context
             )
             
