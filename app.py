@@ -183,23 +183,39 @@ if user_input:
                 context += f"{m['role'].capitalize()}: {m['content']}\n"
             context += f"\nGüncel Soru: {user_input}"
 
-            response = client.models.generate_content(
-                model='gemini-pro',
-                contents=context
-            )
+            # Akıllı Motor Seçici (Fallback Loop)
+            calisan_model = None
+            hata_mesaji = ""
+            # En hafif, hızlı ve ücretsizden (8b) başlayarak kararlı eski sürüme doğru dener
+            modeller_listesi = ["gemini-1.5-flash-8b", "gemini-1.0-pro", "gemini-1.5-flash"]
             
-            bot_reply = response.text
-            st.chat_message("assistant").write(bot_reply)
-            st.session_state.messages.append({"role": "assistant", "content": bot_reply})
-            
-            # Asistan cevabını veritabanına kaydet
-            if supabase:
+            for denenen_model in modeller_listesi:
                 try:
-                    supabase.table("chat_history").insert({"role": "assistant", "content": bot_reply}).execute()
-                except Exception:
-                    pass
+                    response = client.models.generate_content(
+                        model=denenen_model,
+                        contents=context
+                    )
+                    calisan_model = denenen_model
+                    break  # Cevap alındıysa döngüyü kır
+                except Exception as e:
+                    hata_mesaji = str(e)
+                    continue
+            
+            if calisan_model:
+                bot_reply = response.text
+                st.chat_message("assistant").write(bot_reply)
+                st.session_state.messages.append({"role": "assistant", "content": bot_reply})
+                
+                # Asistan cevabını veritabanına kaydet
+                if supabase:
+                    try:
+                        supabase.table("chat_history").insert({"role": "assistant", "content": bot_reply}).execute()
+                    except Exception:
+                        pass
+            else:
+                st.chat_message("assistant").error(f"Tüm yedek motorlar denendi, API Hatası: {hata_mesaji}")
                     
         except Exception as e:
-            st.chat_message("assistant").error(f"Gemini API Hatası: {e}")
+            st.chat_message("assistant").error(f"Sistem Hatası: {e}")
     else:
         st.chat_message("assistant").error("Sistem Uyarısı: GEMINI_API_KEY çevresel değişkeni bulunamadı. Lütfen dış bulut ayarlarından veya terminalden anahtarı tanımla.")
