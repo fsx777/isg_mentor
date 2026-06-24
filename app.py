@@ -186,7 +186,7 @@ if user_input:
             # Akıllı Motor Seçici (Fallback Loop) - Klasik SDK versiyonu
             calisan_model = None
             hata_mesaji = ""
-            modeller_listesi = ["gemini-1.5-flash", "gemini-1.5-flash-8b", "gemini-pro"]
+            modeller_listesi = ["gemini-1.5-flash", "gemini-1.5-flash-8b", "gemini-2.0-flash"]
             
             for denenen_model in modeller_listesi:
                 try:
