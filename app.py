@@ -183,10 +183,10 @@ if user_input:
                 context += f"{m['role'].capitalize()}: {m['content']}\n"
             context += f"\nGüncel Soru: {user_input}"
 
-            # Akıllı Motor Seçici (Fallback Loop) - Klasik SDK versiyonu
+            # Sadece 1.5-flash motoru ile test amaçlı hata ayıklama modu
             calisan_model = None
             hata_mesaji = ""
-            modeller_listesi = ["gemini-1.5-flash", "gemini-1.5-flash-8b", "gemini-2.0-flash"]
+            modeller_listesi = ["gemini-1.5-flash"]
             
             for denenen_model in modeller_listesi:
                 try:
@@ -210,7 +210,7 @@ if user_input:
                     except Exception:
                         pass
             else:
-                st.chat_message("assistant").error(f"Tüm yedek motorlar denendi, API Hatası: {hata_mesaji}")
+                st.chat_message("assistant").error(f"API Hatası (1.5-flash Çıplak Çıktı): {hata_mesaji}")
                     
         except Exception as e:
             st.chat_message("assistant").error(f"Sistem Hatası: {e}")
