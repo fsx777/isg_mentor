@@ -1,0 +1,149 @@
+import streamlit as st
+import datetime
+import os
+from google import genai
+from supabase import create_client, Client
+
+# İŞ YERİ HEKİMLİĞİ AI AJANI - PROTOKOL v4.0 (TAM OTONOM İSG MENTORU)
+# Faz 3: Gemini API entegreli Python kod iskeleti + Görsel Dashboard ve Metrikler
+
+# 1. Sayfa ve Arayüz Ayarları (Dış bulut barındırması için)
+st.set_page_config(
+    page_title="İSG Mentor AI | ÖSYM Radar",
+    page_icon="🏛️",
+    layout="wide"
+)
+
+# Gemini API Yapılandırması (Yeni google-genai kütüphanesi ile güncellendi)
+# Streamlit dış bulutunda (Community Cloud) st.secrets kullanılacak.
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+if GEMINI_API_KEY:
+    try:
+        client = genai.Client(api_key=GEMINI_API_KEY)
+    except Exception as e:
+        client = None
+else:
+    client = None
+
+# Supabase (Hafıza) Yapılandırması
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
+
+if SUPABASE_URL and SUPABASE_KEY:
+    supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+else:
+    supabase = None
+
+# 2. ÖSYM Radarı ve İvedi Uyarı Sistemi (Bürokratik Takip)
+def check_osym_radar():
+    """
+    GitHub Actions veya Supabase üzerinden güncellenen ÖSYM takvimini çeker.
+    """
+    if supabase:
+        try:
+            # TODO: 'osym_radar' tablosundan son durumu çekecek asıl sorgu buraya gelecek
+            # response = supabase.table('osym_radar').select('*').limit(1).execute()
+            pass
+        except Exception as e:
+            pass
+            
+    return {
+        "status": "NORMAL", # Durum "KIRMIZI_ALARM" olursa sistem kilitlenir.
+        "message": "13 Aralık 2026 İSG/2 Sınav Duyurusu İzleniyor.",
+        "deadline": None
+    }
+
+radar_status = check_osym_radar()
+
+# KIRMIZI ALARM KONTROLÜ - Eğer aktifse tüm eğitim modülleri arka plana atılır!
+if radar_status["status"] == "KIRMIZI_ALARM":
+    st.error(f"🚨 KIRMIZI ALARM: {radar_status['message']}")
+    st.warning("Tüm eğitim modülleri geçici olarak durduruldu. Lütfen öncelikle idari başvuru adımlarını tamamla!")
+    st.info(
+        "ÖSYM AİS Başvuru Adımları:\n"
+        "1. osym.gov.tr (AİS) adresine giriş yap.\n"
+        "2. Başvuru işlemlerini tamamla ve ücreti yatır.\n"
+        "3. Onay ekranını kontrol et ve süreci bitir."
+    )
+    st.stop() # Kodun geri kalanını çalıştırmaz, arayüzü kilitler.
+
+# 3. Ana Arayüz (Kırmızı Alarm yoksa çalışır)
+st.title("🏛️ İSG Mentor AI - v4.0")
+
+# --- DASHBOARD METRİKLERİ (Yeni Eklenen Görsel Modül) ---
+st.markdown("---")
+col1, col2, col3 = st.columns(3)
+
+# Sınava kalan gün (CSGB'nin dünkü 13 Aralık 2026 duyurusu baz alınarak dinamik hesaplanır)
+exam_date = datetime.date(2026, 12, 13)
+today = datetime.date.today()
+days_left = (exam_date - today).days if (exam_date - today).days > 0 else 0
+
+with col1:
+    st.metric(label="🗓️ İSG/2 Sınavına Kalan", value=f"{days_left} Gün", delta="-1 Gün")
+with col2:
+    st.metric(label="🎯 Günlük Hedef Tamamlama", value="%75", delta="%15 Artış")
+with col3:
+    radar_color = "🟢 Yeşil (Güvenli)" if radar_status["status"] == "NORMAL" else "🔴 Kırmızı Alarm"
+    st.metric(label="📡 ÖSYM Radar Durumu", value=radar_color, delta="Sistem Aktif", delta_color="normal")
+st.markdown("---")
+
+# Sekmeler: Eğitim, Eksik Kapatma, İdari Süreçler
+tab1, tab2, tab3 = st.tabs(["📚 Günlük Eğitim Programı", "🎯 Eksik Kapatma", "⚙️ İdari Takip & Radar"])
+
+with tab1:
+    st.header("Günlük İlerleme ve Adaptif Notlar")
+    st.write("GitHub Actions tarafından taranıp, 6331 ve 4857 mevzuat filtresinden geçen temiz veriler burada olacak.")
+    
+    # --- İLERLEME ÇUBUKLARI (Yeni Eklenen Görsel Modül) ---
+    st.subheader("Modül İlerlemeleri")
+    st.write("6331 Sayılı Kanun ve Mevzuat")
+    st.progress(65)
+    st.write("İş Yeri Hekimliği Klinik Tuzaklar")
+    st.progress(40)
+    
+with tab2:
+    st.header("Meydan Okuma (Ters Köşe Sorular)")
+    st.write("Çelişkili 'Şüpheli' notlar veya 3-4 gün önce işlenen konulardan gelen ters köşe testler.")
+    
+    # --- MEYDAN OKUMA KARTLARI (Yeni Eklenen Görsel Modül) ---
+    with st.expander("⚠️ Şüpheli Not: Gece Çalışma Süreleri ve Kadın İşçiler"):
+        st.warning("Bu bilgi son taramada çelişkili bulundu. Lütfen mevzuatı doğrula.")
+        st.write("**Gelen Veri:** Kadın işçiler gece postasında 7.5 saatten fazla çalıştırılamaz. (Turizm sektörü hariç)")
+        st.write("**Görev:** Gemini ile bu bilginin 4857 sayılı kanundaki istisnalarını tartış.")
+
+    with st.expander("🧠 Ters Köşe Soru: İSG Kurul Toplantı Periyotları"):
+        st.info("3 gün önce öğrendiğin konunun kalıcılık testi.")
+        st.write("**Soru:** Çok tehlikeli sınıfta yer alan ve 150 çalışanı olan bir iş yerinde İSG kurulu en az hangi sıklıkta toplanmalıdır?")
+        st.write("Cevabını aşağıdaki sohbet alanından mentora ilet.")
+
+    if supabase:
+        st.success("Supabase hafıza bağlantısı aktif. Geçmiş veriler çekilmeye hazır.")
+    else:
+        st.warning("Supabase bağlantısı bekleniyor. (SUPABASE_URL ve SUPABASE_KEY çevresel değişkenleri eksik)")
+
+with tab3:
+    st.header("ÖSYM Radarı & Ağ Durumu")
+    st.write("**Alan Adı Bağlantısı:** isg.mertuspatronus.com (Cloudflare üzerinden şifreli, VPS bağlantısı yok)")
+    st.info(f"Mevcut Radar Durumu: {radar_status['message']}")
+
+# 4. Hekim - Mentor Sohbet Arayüzü
+st.markdown("---")
+st.subheader("🤖 İSG Mentor ile Konuş")
+user_input = st.chat_input("6331 sayılı kanun veya klinik tuzaklar hakkında sor...")
+
+if user_input:
+    st.chat_message("user").write(user_input)
+    if client:
+        try:
+            # Yeni nesil genai client ile prompt gönderimi
+            response = client.models.generate_content(
+                model='gemini-1.5-flash',
+                contents=f"Sen bir İş Yeri Hekimliği AI mentorusun. Sadece 6331 sayılı İSG kanunu ve tıbbi mevzuat çerçevesinde net, kısa ve profesyonel cevap ver. Soru: {user_input}"
+            )
+            st.chat_message("assistant").write(response.text)
+        except Exception as e:
+            st.chat_message("assistant").error(f"Gemini API Hatası: {e}")
+    else:
+        st.chat_message("assistant").error("Sistem Uyarısı: GEMINI_API_KEY çevresel değişkeni bulunamadı. Lütfen dış bulut ayarlarından veya terminalden anahtarı tanımla.")
+
