@@ -144,6 +144,25 @@ with tab3:
 st.markdown("---")
 st.subheader("🤖 İSG Mentor ile Konuş")
 
+# --- X-RAY (RÖNTGEN) MODÜLÜ ---
+if client_available:
+    with st.expander("🔍 Sistem Röntgeni: API Anahtarına Tanımlı Açık Modeller"):
+        try:
+            acik_modeller = []
+            for m in genai.list_models():
+                if 'generateContent' in m.supported_generation_methods:
+                    acik_modeller.append(m.name)
+            
+            if acik_modeller:
+                st.write("Google'ın bu projede sana kullanma izni verdiği üretim motorları:")
+                for model_ismi in acik_modeller:
+                    st.code(model_ismi)
+            else:
+                st.warning("Bu şifreye tanımlı hiçbir metin motoru bulunamadı!")
+        except Exception as e:
+            st.error(f"Modeller taranamadı: {e}")
+# ------------------------------
+
 # Hafıza başlatma (Session State) ve Supabase'den geçmişi çekme
 if "messages" not in st.session_state:
     st.session_state.messages = []
