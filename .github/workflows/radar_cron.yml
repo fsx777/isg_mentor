@@ -1,0 +1,30 @@
+name: ÖSYM Radar Bot (Otonom)
+
+on:
+  schedule:
+    - cron: '0 0 * * *' # Her gece 00:00 UTC (Türkiye saati ile 03:00)
+  workflow_dispatch: # İstediğin zaman GitHub üzerinden manuel tetiklemek için buton
+
+jobs:
+  run-radar:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Karargah Kodlarını Çek
+      uses: actions/checkout@v4
+      
+    - name: Python Ortamını Kur
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        
+    - name: Gerekli Silahları (Bağımlılıkları) Yükle
+      run: |
+        python -m pip install --upgrade pip
+        pip install requests beautifulsoup4 supabase
+        
+    - name: Radar Botunu Ateşle
+      env:
+        SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+        SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+      run: python radar_bot.py
