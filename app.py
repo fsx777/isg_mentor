@@ -153,21 +153,48 @@ with tab2:
     st.header("Meydan Okuma (Ters Köşe Sorular)")
     st.write("Çelişkili 'Şüpheli' notlar veya 3-4 gün önce işlenen konulardan gelen ters köşe testler.")
 
-    # Yeni Eklenen Otonom Ters Köşe Soru Ekranı
+    # FAZ 9: Adaptif Döngü ve İnteraktif Test Ekranı
     if latest_question:
         with st.expander("🧠 Otonom Botun Günlük Ters Köşe Sorusu", expanded=True):
             st.write(f"**Soru:** {latest_question['soru_metni']}")
-            st.write(f"A) {latest_question['a_sikki']}")
-            st.write(f"B) {latest_question['b_sikki']}")
-            st.write(f"C) {latest_question['c_sikki']}")
-            st.write(f"D) {latest_question['d_sikki']}")
-            st.write(f"E) {latest_question['e_sikki']}")
             
-            st.markdown("---")
-            cevap_goster = st.checkbox("Cevabı ve Açıklamayı Göster")
-            if cevap_goster:
-                st.success(f"**Doğru Cevap:** {latest_question['dogru_cevap']}")
-                st.info(f"**Neden?** {latest_question['cozum_aciklamasi']}")
+            secenekler = [
+                latest_question['a_sikki'],
+                latest_question['b_sikki'],
+                latest_question['c_sikki'],
+                latest_question['d_sikki'],
+                latest_question['e_sikki']
+            ]
+            
+            kullanici_cevabi = st.radio("Cevabını Seç:", secenekler, index=None)
+            
+            if st.button("Cevapla ve Değerlendir"):
+                if kullanici_cevabi:
+                    if kullanici_cevabi == latest_question['dogru_cevap']:
+                        st.success("✅ Tebrikler! Doğru cevap.")
+                        st.info(f"**Açıklama:** {latest_question['cozum_aciklamasi']}")
+                        durum = "gecti"
+                        skor = 100
+                    else:
+                        st.error("❌ Yanlış cevap.")
+                        st.warning(f"**Doğru Cevap:** {latest_question['dogru_cevap']}")
+                        st.info(f"**Neden?** {latest_question['cozum_aciklamasi']}")
+                        durum = "tekrar_gerekli"
+                        skor = 0
+                    
+                    # Supabase kullanici_ilerleme tablosuna Adaptif Kayıt
+                    if supabase:
+                        try:
+                            supabase.table("kullanici_ilerleme").insert({
+                                "bagli_modul_id": latest_module['id'],
+                                "okundu_mu": True,
+                                "son_sinav_skoru": skor,
+                                "durum": durum
+                            }).execute()
+                        except Exception as e:
+                            st.warning("Veritabanına kaydedilirken bir hata oluştu.")
+                else:
+                    st.warning("Lütfen bir şık seç!")
 
     # --- MEYDAN OKUMA KARTLARI (Mevcut Görsel Yapı Korunmuştur) ---
     with st.expander("⚠️ Şüpheli Not: Gece Çalışma Süreleri ve Kadın İşçiler"):
