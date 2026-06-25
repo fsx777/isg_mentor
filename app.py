@@ -34,6 +34,10 @@ if SUPABASE_URL and SUPABASE_KEY:
 else:
     supabase = None
 
+# Hafıza başlatma: İnsiyatifli Devam ve Karma Modu için İndeks
+if "aktif_soru_index" not in st.session_state:
+    st.session_state.aktif_soru_index = 0
+
 # 2. ÖSYM Radarı ve İvedi Uyarı Sistemi (Bürokratik Takip)
 def check_osym_radar():
     """
@@ -95,7 +99,7 @@ try:
 except Exception as e:
     st.warning("📡 ÖSYM Radarına şu an ulaşılamıyor.")
 
-# --- DASHBOARD METRİKLERİ (Yeni Eklenen Görsel Modül) ---
+# --- DASHBOARD METRİKLERİ (Mevcut Görsel Yapı Korunmuştur) ---
 st.markdown("---")
 col1, col2, col3 = st.columns(3)
 
@@ -113,17 +117,77 @@ with col3:
     st.metric(label="📡 ÖSYM Radar Durumu", value=radar_color, delta="Sistem Aktif", delta_color="normal")
 st.markdown("---")
 
-# Veritabanından Otonom Eğitim Verilerini Çekme (FAZ 8)
+# Veritabanından Otonom Eğitim Verilerini Çekme (FAZ 9: Gerçek Zamanlı Dinamik Soru Motoru)
 latest_module = None
 latest_question = None
 if supabase:
     try:
-        mod_res = supabase.table("egitim_materyalleri").select("*").order("id", desc=True).limit(1).execute()
-        if mod_res.data:
-            latest_module = mod_res.data[0]
-            soru_res = supabase.table("soru_bankasi").select("*").eq("bagli_modul_id", latest_module["id"]).limit(1).execute()
-            if soru_res.data:
-                latest_question = soru_res.data[0]
+        # Tüm modülleri çek
+        mod_res = supabase.table("egitim_materyalleri").select("*").order("id", desc=False).execute()
+        if mod_res.data and len(mod_res.data) > 0:
+            total_mods = len(mod_res.data)
+            # İndeks modül sayısını aşarsa başa döner
+            gecerli_index = st.session_state.aktif_soru_index % total_mods
+            latest_module = mod_res.data[gecerli_index]
+            
+            # Eğer konular bitmediyse (ilk tur) veritabanındaki orijinal soruyu getir
+            if st.session_state.aktif_soru_index < total_mods:
+                soru_res = supabase.table("soru_bankasi").select("*").eq("bagli_modul_id", latest_module["id"]).limit(1).execute()
+                if soru_res.data:
+                    latest_question = soru_res.data[0]
+            else:
+                # Karma Mod: Aynı konu için Gemini ile yepyeni ters köşe soru sentezle
+                state_key = f"dinamik_soru_{st.session_state.aktif_soru_index}"
+                if state_key not in st.session_state:
+                    if client_available:
+                        prompt = f"""Sen zorlayıcı bir İSG mentorusun. Aşağıdaki bilgiye dayanarak, daha önce sorulmamış, farklı bir klinik/mevzuat tuzağı içeren ÇOKTAN SEÇMELİ yepyeni bir soru üret. 
+                        Bilgi: {latest_module['hap_bilgi']}
+                        SADECE aşağıdaki formatta yanıt ver, ekstra metin ekleme:
+                        SORU: [Soru Metni]
+                        A: [A şıkkı]
+                        B: [B şıkkı]
+                        C: [C şıkkı]
+                        D: [D şıkkı]
+                        E: [E şıkkı]
+                        CEVAP: [Sadece Doğru Şıkkın Harfi, örn: C]
+                        ACIKLAMA: [Neden doğru olduğunun kısa açıklaması]"""
+                        
+                        try:
+                            model = genai.GenerativeModel("gemini-2.5-flash")
+                            response = model.generate_content(prompt)
+                            lines = response.text.strip().split('\n')
+                            q_dict = {}
+                            for line in lines:
+                                if line.startswith("SORU:"): q_dict['soru_metni'] = line.replace("SORU:", "").strip()
+                                elif line.startswith("A:"): q_dict['a_sikki'] = line.replace("A:", "").strip()
+                                elif line.startswith("B:"): q_dict['b_sikki'] = line.replace("B:", "").strip()
+                                elif line.startswith("C:"): q_dict['c_sikki'] = line.replace("C:", "").strip()
+                                elif line.startswith("D:"): q_dict['d_sikki'] = line.replace("D:", "").strip()
+                                elif line.startswith("E:"): q_dict['e_sikki'] = line.replace("E:", "").strip()
+                                elif line.startswith("CEVAP:"):
+                                    cevap_harf = line.replace("CEVAP:", "").strip()
+                                    harf_map = {"A": q_dict.get('a_sikki'), "B": q_dict.get('b_sikki'), "C": q_dict.get('c_sikki'), "D": q_dict.get('d_sikki'), "E": q_dict.get('e_sikki')}
+                                    q_dict['dogru_cevap'] = harf_map.get(cevap_harf, q_dict.get('a_sikki'))
+                                elif line.startswith("ACIKLAMA:"): q_dict['cozum_aciklamasi'] = line.replace("ACIKLAMA:", "").strip()
+                            
+                            q_dict['id'] = f"dinamik_{st.session_state.aktif_soru_index}"
+                            # Eğer parsing başarılıysa kaydet
+                            if 'soru_metni' in q_dict and 'dogru_cevap' in q_dict:
+                                st.session_state[state_key] = q_dict
+                            else:
+                                raise Exception("Parsing hatası")
+                        except Exception as e:
+                            # Yapay zeka hata verirse orjinal soruyu yedek olarak getir
+                            soru_res = supabase.table("soru_bankasi").select("*").eq("bagli_modul_id", latest_module["id"]).limit(1).execute()
+                            if soru_res.data:
+                                st.session_state[state_key] = soru_res.data[0]
+                    else:
+                        # API yoksa orjinal soruyu kullan
+                        soru_res = supabase.table("soru_bankasi").select("*").eq("bagli_modul_id", latest_module["id"]).limit(1).execute()
+                        if soru_res.data:
+                            st.session_state[state_key] = soru_res.data[0]
+                
+                latest_question = st.session_state.get(state_key)
     except Exception as e:
         pass
 
@@ -133,7 +197,7 @@ tab1, tab2, tab3 = st.tabs(["📚 Günlük Eğitim Programı", "🎯 Eksik Kapat
 with tab1:
     st.header("Günlük İlerleme ve Adaptif Notlar")
     
-    # Yeni Eklenen Otonom Hap Bilgi Ekranı
+    # Otonom Hap Bilgi Ekranı
     if latest_module:
         st.success(f"📖 **Günün Konusu:** {latest_module['konu_basligi']}")
         st.info(latest_module['hap_bilgi'])
@@ -159,16 +223,17 @@ with tab2:
             st.write(f"**Soru:** {latest_question['soru_metni']}")
             
             secenekler = [
-                latest_question['a_sikki'],
-                latest_question['b_sikki'],
-                latest_question['c_sikki'],
-                latest_question['d_sikki'],
-                latest_question['e_sikki']
+                latest_question.get('a_sikki', 'A'),
+                latest_question.get('b_sikki', 'B'),
+                latest_question.get('c_sikki', 'C'),
+                latest_question.get('d_sikki', 'D'),
+                latest_question.get('e_sikki', 'E')
             ]
             
-            kullanici_cevabi = st.radio("Cevabını Seç:", secenekler, index=None)
+            # Dinamik key eklendi: Yeni soruya geçildiğinde şık seçimi sıfırlansın diye
+            kullanici_cevabi = st.radio("Cevabını Seç:", secenekler, index=None, key=f"radio_{latest_question['id']}")
             
-            if st.button("Cevapla ve Değerlendir"):
+            if st.button("Cevapla ve Değerlendir", key=f"btn_{latest_question['id']}"):
                 if kullanici_cevabi:
                     if kullanici_cevabi == latest_question['dogru_cevap']:
                         st.success("✅ Tebrikler! Doğru cevap.")
@@ -195,8 +260,14 @@ with tab2:
                             st.warning("Veritabanına kaydedilirken bir hata oluştu.")
                 else:
                     st.warning("Lütfen bir şık seç!")
+            
+            # İnsiyatifli Devam Butonu
+            st.markdown("---")
+            if st.button("Sıradaki Eğitime Geç ➡️", key=f"next_{latest_question['id']}"):
+                st.session_state.aktif_soru_index += 1
+                st.rerun()
 
-    # --- MEYDAN OKUMA KARTLARI (Mevcut Görsel Yapı Korunmuştur) ---
+    # --- MEY उद्यम OKUMA KARTLARI (Mevcut Görsel Yapı Korunmuştur) ---
     with st.expander("⚠️ Şüpheli Not: Gece Çalışma Süreleri ve Kadın İşçiler"):
         st.warning("Bu bilgi son taramada çelişkili bulundu. Lütfen mevzuatı doğrula.")
         st.write("**Gelen Veri:** Kadın işçiler gece postasında 7.5 saatten fazla çalıştırılamaz. (Turizm sektörü hariç)")
