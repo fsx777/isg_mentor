@@ -1,6 +1,7 @@
 import streamlit as st
 import datetime
 import os
+import subprocess
 import google.generativeai as genai
 from supabase import create_client, Client
 
@@ -191,8 +192,8 @@ if supabase:
     except Exception as e:
         pass
 
-# Sekmeler: Eğitim, Eksik Kapatma, İdari Süreçler
-tab1, tab2, tab3 = st.tabs(["📚 Günlük Eğitim Programı", "🎯 Eksik Kapatma", "⚙️ İdari Takip & Radar"])
+# Sekmeler: Eğitim, Eksik Kapatma, İdari Süreçler, Deep Hunter (Avcı)
+tab1, tab2, tab3, tab4 = st.tabs(["📚 Günlük Eğitim Programı", "🎯 Eksik Kapatma", "⚙️ İdari Takip & Radar", "🚀 Deep Hunter"])
 
 with tab1:
     st.header("Günlük İlerleme ve Adaptif Notlar")
@@ -267,7 +268,7 @@ with tab2:
                 st.session_state.aktif_soru_index += 1
                 st.rerun()
 
-    # --- MEY उद्यम OKUMA KARTLARI (Mevcut Görsel Yapı Korunmuştur) ---
+    # --- MEYDAN OKUMA KARTLARI (Mevcut Görsel Yapı Korunmuştur) ---
     with st.expander("⚠️ Şüpheli Not: Gece Çalışma Süreleri ve Kadın İşçiler"):
         st.warning("Bu bilgi son taramada çelişkili bulundu. Lütfen mevzuatı doğrula.")
         st.write("**Gelen Veri:** Kadın işçiler gece postasında 7.5 saatten fazla çalıştırılamaz. (Turizm sektörü hariç)")
@@ -287,6 +288,28 @@ with tab3:
     st.header("ÖSYM Radarı & Ağ Durumu")
     st.write("**Alan Adı Bağlantısı:** isg.mertuspatronus.com (Cloudflare üzerinden şifreli, VPS bağlantısı yok)")
     st.info(f"Mevcut Radar Durumu: {radar_status['message']}")
+
+with tab4:
+    st.header("Sınırsız Avcı (Deep Hunter) Kontrol Merkezi")
+    st.write("Veritabanına internetten süzülmüş yepyeni İSG soruları ve klinik tuzaklar indirmek için avcıyı ateşle.")
+    
+    if st.button("🚀 Deep Hunter'ı Ateşle (Yeni Cephane Bul)", use_container_width=True):
+        with st.spinner("🕵🏻‍♂️ Deep Hunter internetin derinliklerinde avlanıyor... Lütfen 10-15 saniye bekle."):
+            try:
+                # egitim_avcisi.py dosyasını arka planda çalıştır ve logları yakala
+                result = subprocess.run(["python3", "egitim_avcisi.py"], capture_output=True, text=True)
+                
+                if result.returncode == 0:
+                    st.success("✅ Operasyon Başarılı! Yeni cephane kütüphaneye yüklendi komutan.")
+                    with st.expander("Avcı Raporunu Görüntüle"):
+                        st.code(result.stdout)
+                    st.info("Taze mühimmatı görmek için 'Eksik Kapatma' sekmesindeki 'Sıradaki Eğitime Geç ➡️' butonunu kullanabilirsin.")
+                else:
+                    st.error("🚨 Avcı bir hatayla karşılaştı!")
+                    with st.expander("Hata Detayı"):
+                        st.code(result.stderr)
+            except Exception as e:
+                st.error(f"Sistem Hatası: {str(e)}")
 
 # 4. Hekim - Mentor Sohbet Arayüzü (Hafıza Entegreli)
 st.markdown("---")
