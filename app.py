@@ -113,14 +113,36 @@ with col3:
     st.metric(label="📡 ÖSYM Radar Durumu", value=radar_color, delta="Sistem Aktif", delta_color="normal")
 st.markdown("---")
 
+# Veritabanından Otonom Eğitim Verilerini Çekme (FAZ 8)
+latest_module = None
+latest_question = None
+if supabase:
+    try:
+        mod_res = supabase.table("egitim_materyalleri").select("*").order("id", desc=True).limit(1).execute()
+        if mod_res.data:
+            latest_module = mod_res.data[0]
+            soru_res = supabase.table("soru_bankasi").select("*").eq("bagli_modul_id", latest_module["id"]).limit(1).execute()
+            if soru_res.data:
+                latest_question = soru_res.data[0]
+    except Exception as e:
+        pass
+
 # Sekmeler: Eğitim, Eksik Kapatma, İdari Süreçler
 tab1, tab2, tab3 = st.tabs(["📚 Günlük Eğitim Programı", "🎯 Eksik Kapatma", "⚙️ İdari Takip & Radar"])
 
 with tab1:
     st.header("Günlük İlerleme ve Adaptif Notlar")
-    st.write("GitHub Actions tarafından taranıp, 6331 ve 4857 mevzuat filtresinden geçen temiz veriler burada olacak.")
+    
+    # Yeni Eklenen Otonom Hap Bilgi Ekranı
+    if latest_module:
+        st.success(f"📖 **Günün Konusu:** {latest_module['konu_basligi']}")
+        st.info(latest_module['hap_bilgi'])
+        if latest_module.get('kaynak_url'):
+            st.caption(f"🔗 Kaynak: {latest_module['kaynak_url']}")
+    else:
+        st.write("GitHub Actions tarafından taranıp, 6331 ve 4857 mevzuat filtresinden geçen temiz veriler burada olacak.")
 
-    # --- İLERLEME ÇUBUKLARI (Yeni Eklenen Görsel Modül) ---
+    # --- İLERLEME ÇUBUKLARI (Mevcut Görsel Yapı Korunmuştur) ---
     st.subheader("Modül İlerlemeleri")
     st.write("6331 Sayılı Kanun ve Mevzuat")
     st.progress(65)
@@ -131,7 +153,23 @@ with tab2:
     st.header("Meydan Okuma (Ters Köşe Sorular)")
     st.write("Çelişkili 'Şüpheli' notlar veya 3-4 gün önce işlenen konulardan gelen ters köşe testler.")
 
-    # --- MEY उद्यमUMA KARTLARI (Yeni Eklenen Görsel Modül) ---
+    # Yeni Eklenen Otonom Ters Köşe Soru Ekranı
+    if latest_question:
+        with st.expander("🧠 Otonom Botun Günlük Ters Köşe Sorusu", expanded=True):
+            st.write(f"**Soru:** {latest_question['soru_metni']}")
+            st.write(f"A) {latest_question['a_sikki']}")
+            st.write(f"B) {latest_question['b_sikki']}")
+            st.write(f"C) {latest_question['c_sikki']}")
+            st.write(f"D) {latest_question['d_sikki']}")
+            st.write(f"E) {latest_question['e_sikki']}")
+            
+            st.markdown("---")
+            cevap_goster = st.checkbox("Cevabı ve Açıklamayı Göster")
+            if cevap_goster:
+                st.success(f"**Doğru Cevap:** {latest_question['dogru_cevap']}")
+                st.info(f"**Neden?** {latest_question['cozum_aciklamasi']}")
+
+    # --- MEYDAN OKUMA KARTLARI (Mevcut Görsel Yapı Korunmuştur) ---
     with st.expander("⚠️ Şüpheli Not: Gece Çalışma Süreleri ve Kadın İşçiler"):
         st.warning("Bu bilgi son taramada çelişkili bulundu. Lütfen mevzuatı doğrula.")
         st.write("**Gelen Veri:** Kadın işçiler gece postasında 7.5 saatten fazla çalıştırılamaz. (Turizm sektörü hariç)")
