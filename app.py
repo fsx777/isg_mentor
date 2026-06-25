@@ -53,11 +53,11 @@ def check_osym_radar():
                 veri = response.data[0]
                 durum = veri.get("durum", "")
                 mesaj = veri.get("mesaj", "")
-                
+
                 # Eğer durum "Kırmızı" ise sistemi kilitler
                 if "Kırmızı" in durum:
                     radar_data["status"] = "KIRMIZI_ALARM"
-                
+
                 radar_data["message"] = f"{durum} - {mesaj}"
         except Exception as e:
             radar_data["message"] = f"Supabase Bağlantı Hatası: {str(e)}"
@@ -75,13 +75,25 @@ if radar_status["status"] == "KIRMIZI_ALARM":
     st.info(
         "ÖSYM AİS Başvuru Adımları:\n"
         "1. osym.gov.tr (AİS) adresine giriş yap.\n"
-        "2. Başvuru işlemlerini tamamla ve ücreti yatır.\n"
+        "2. Başvuru işlemleri tamamla ve ücreti yatır.\n"
         "3. Onay ekranını kontrol et ve süreci bitir."
     )
     st.stop() # Kodun geri kalanını çalıştırmaz, arayüzü kilitler.
 
 # 3. Ana Arayüz (Kırmızı Alarm yoksa çalışır)
 st.title("🏛️ İSG Mentor AI - v4.0")
+
+# 📡 ÖSYM Otonom Radar Modülü
+try:
+    radar_sorgu = supabase.table("osym_radar").select("*").order("id", desc=True).limit(1).execute()
+    if radar_sorgu.data:
+        son_radar = radar_sorgu.data[0]
+        if son_radar["durum"] == "Kırmızı Alarm":
+            st.error(f"🚨 **ÖSYM RADAR ALARMI:** {son_radar['mesaj']}")
+        else:
+            st.info(f"📡 **ÖSYM Radarı Aktif:** {son_radar['mesaj']}")
+except Exception as e:
+    st.warning("📡 ÖSYM Radarına şu an ulaşılamıyor.")
 
 # --- DASHBOARD METRİKLERİ (Yeni Eklenen Görsel Modül) ---
 st.markdown("---")
@@ -167,7 +179,7 @@ if user_input:
     # Kullanıcı mesajını ekrana bas ve hafızaya al
     st.chat_message("user").write(user_input)
     st.session_state.messages.append({"role": "user", "content": user_input})
-    
+
     # Veritabanına kaydet
     if supabase:
         try:
@@ -187,7 +199,7 @@ if user_input:
             calisan_model = None
             hata_mesaji = ""
             modeller_listesi = ["gemini-2.5-flash", "gemini-flash-latest"]
-            
+
             for denenen_model in modeller_listesi:
                 try:
                     model = genai.GenerativeModel(denenen_model)
@@ -197,12 +209,12 @@ if user_input:
                 except Exception as e:
                     hata_mesaji = str(e)
                     continue
-            
+
             if calisan_model:
                 bot_reply = response.text
                 st.chat_message("assistant").write(bot_reply)
                 st.session_state.messages.append({"role": "assistant", "content": bot_reply})
-                
+
                 # Asistan cevabını veritabanına kaydet
                 if supabase:
                     try:
@@ -211,7 +223,7 @@ if user_input:
                         pass
             else:
                 st.chat_message("assistant").error(f"API Hatası (Yeni Nesil Motorlar): {hata_mesaji}")
-                    
+
         except Exception as e:
             st.chat_message("assistant").error(f"Sistem Hatası: {e}")
     else:
