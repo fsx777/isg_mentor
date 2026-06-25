@@ -1,0 +1,30 @@
+name: Siber Basogretmen - Gece Avcisi
+
+on:
+  schedule:
+    - cron: '0 1 * * *' # Her gece Türkiye saati ile 04:00'te çalışır (UTC 01:00)
+  workflow_dispatch: # GitHub panelinden manuel tetikleme butonu
+
+jobs:
+  gece_avcisi_calistir:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Karargah Kodlarini Cek
+      uses: actions/checkout@v3
+
+    - name: Python Kurulumu
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+
+    - name: Gerekli Cephaneyi (Kutuphaneleri) Yukle
+      run: |
+        pip install google-generativeai supabase requests beautifulsoup4
+
+    - name: Avci Botu Atesle
+      env:
+        SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+        SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      run: python egitim_avcisi.py
