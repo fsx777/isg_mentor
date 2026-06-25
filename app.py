@@ -1,7 +1,6 @@
 import streamlit as st
 import datetime
 import os
-import subprocess
 import google.generativeai as genai
 from supabase import create_client, Client
 
@@ -15,8 +14,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# Gemini API Yapılandırması (Klasik google-generativeai kütüphanesi ile güncellendi)
-# Streamlit dış bulutunda (Community Cloud) st.secrets kullanılacak.
+# Gemini API Yapılandırması
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 client_available = False
 if GEMINI_API_KEY:
@@ -39,41 +37,31 @@ else:
 if "aktif_soru_index" not in st.session_state:
     st.session_state.aktif_soru_index = 0
 
-# 2. ÖSYM Radarı ve İvedi Uyarı Sistemi (Bürokratik Takip)
+# 2. ÖSYM Radarı ve İvedi Uyarı Sistemi
 def check_osym_radar():
-    """
-    Supabase üzerinden güncellenen ÖSYM takvimini çeker.
-    """
     radar_data = {
         "status": "NORMAL",
         "message": "13 Aralık 2026 İSG/2 Sınav Duyurusu İzleniyor.",
         "deadline": None
     }
-
     if supabase:
         try:
-            # osym_radar tablosundan en son eklenen kaydı çek
             response = supabase.table('osym_radar').select('*').order('created_at', desc=True).limit(1).execute()
             if response.data:
                 veri = response.data[0]
                 durum = veri.get("durum", "")
                 mesaj = veri.get("mesaj", "")
-
-                # Eğer durum "Kırmızı" ise sistemi kilitler
                 if "Kırmızı" in durum:
                     radar_data["status"] = "KIRMIZI_ALARM"
-
                 radar_data["message"] = f"{durum} - {mesaj}"
         except Exception as e:
             radar_data["message"] = f"Supabase Bağlantı Hatası: {str(e)}"
     else:
         radar_data["message"] = "Supabase bağlantısı bekleniyor."
-
     return radar_data
 
 radar_status = check_osym_radar()
 
-# KIRMIZI ALARM KONTROLÜ - Eğer aktifse tüm eğitim modülleri arka plana atılır!
 if radar_status["status"] == "KIRMIZI_ALARM":
     st.error(f"🚨 KIRMIZI ALARM: {radar_status['message']}")
     st.warning("Tüm eğitim modülleri geçici olarak durduruldu. Lütfen öncelikle idari başvuru adımlarını tamamla!")
@@ -83,12 +71,11 @@ if radar_status["status"] == "KIRMIZI_ALARM":
         "2. Başvuru işlemleri tamamla ve ücreti yatır.\n"
         "3. Onay ekranını kontrol et ve süreci bitir."
     )
-    st.stop() # Kodun geri kalanını çalıştırmaz, arayüzü kilitler.
+    st.stop()
 
-# 3. Ana Arayüz (Kırmızı Alarm yoksa çalışır)
+# 3. Ana Arayüz
 st.title("🏛️ İSG Mentor AI - v4.0")
 
-# 📡 ÖSYM Otonom Radar Modülü
 try:
     radar_sorgu = supabase.table("osym_radar").select("*").order("id", desc=True).limit(1).execute()
     if radar_sorgu.data:
@@ -100,11 +87,9 @@ try:
 except Exception as e:
     st.warning("📡 ÖSYM Radarına şu an ulaşılamıyor.")
 
-# --- DASHBOARD METRİKLERİ (Mevcut Görsel Yapı Korunmuştur) ---
 st.markdown("---")
 col1, col2, col3 = st.columns(3)
 
-# Sınava kalan gün (CSGB'nin dünkü 13 Aralık 2026 duyurusu baz alınarak dinamik hesaplanır)
 exam_date = datetime.date(2026, 12, 13)
 today = datetime.date.today()
 days_left = (exam_date - today).days if (exam_date - today).days > 0 else 0
@@ -118,26 +103,24 @@ with col3:
     st.metric(label="📡 ÖSYM Radar Durumu", value=radar_color, delta="Sistem Aktif", delta_color="normal")
 st.markdown("---")
 
-# Veritabanından Otonom Eğitim Verilerini Çekme (FAZ 9: Gerçek Zamanlı Dinamik Soru Motoru)
+# Veritabanından Otonom Eğitim Verilerini Çekme
 latest_module = None
 latest_question = None
+total_mods = 0
+
 if supabase:
     try:
-        # Tüm modülleri çek
         mod_res = supabase.table("egitim_materyalleri").select("*").order("id", desc=False).execute()
         if mod_res.data and len(mod_res.data) > 0:
             total_mods = len(mod_res.data)
-            # İndeks modül sayısını aşarsa başa döner
             gecerli_index = st.session_state.aktif_soru_index % total_mods
             latest_module = mod_res.data[gecerli_index]
             
-            # Eğer konular bitmediyse (ilk tur) veritabanındaki orijinal soruyu getir
             if st.session_state.aktif_soru_index < total_mods:
                 soru_res = supabase.table("soru_bankasi").select("*").eq("bagli_modul_id", latest_module["id"]).limit(1).execute()
                 if soru_res.data:
                     latest_question = soru_res.data[0]
             else:
-                # Karma Mod: Aynı konu için Gemini ile yepyeni ters köşe soru sentezle
                 state_key = f"dinamik_soru_{st.session_state.aktif_soru_index}"
                 if state_key not in st.session_state:
                     if client_available:
@@ -152,7 +135,6 @@ if supabase:
                         E: [E şıkkı]
                         CEVAP: [Sadece Doğru Şıkkın Harfi, örn: C]
                         ACIKLAMA: [Neden doğru olduğunun kısa açıklaması]"""
-                        
                         try:
                             model = genai.GenerativeModel("gemini-2.5-flash")
                             response = model.generate_content(prompt)
@@ -172,53 +154,61 @@ if supabase:
                                 elif line.startswith("ACIKLAMA:"): q_dict['cozum_aciklamasi'] = line.replace("ACIKLAMA:", "").strip()
                             
                             q_dict['id'] = f"dinamik_{st.session_state.aktif_soru_index}"
-                            # Eğer parsing başarılıysa kaydet
                             if 'soru_metni' in q_dict and 'dogru_cevap' in q_dict:
                                 st.session_state[state_key] = q_dict
                             else:
                                 raise Exception("Parsing hatası")
                         except Exception as e:
-                            # Yapay zeka hata verirse orjinal soruyu yedek olarak getir
                             soru_res = supabase.table("soru_bankasi").select("*").eq("bagli_modul_id", latest_module["id"]).limit(1).execute()
                             if soru_res.data:
                                 st.session_state[state_key] = soru_res.data[0]
                     else:
-                        # API yoksa orjinal soruyu kullan
                         soru_res = supabase.table("soru_bankasi").select("*").eq("bagli_modul_id", latest_module["id"]).limit(1).execute()
                         if soru_res.data:
                             st.session_state[state_key] = soru_res.data[0]
-                
                 latest_question = st.session_state.get(state_key)
     except Exception as e:
         pass
 
-# Sekmeler: Eğitim, Eksik Kapatma, İdari Süreçler, Deep Hunter (Avcı)
 tab1, tab2, tab3, tab4 = st.tabs(["📚 Günlük Eğitim Programı", "🎯 Eksik Kapatma", "⚙️ İdari Takip & Radar", "🚀 Deep Hunter"])
 
 with tab1:
     st.header("Günlük İlerleme ve Adaptif Notlar")
     
-    # Otonom Hap Bilgi Ekranı
     if latest_module:
         st.success(f"📖 **Günün Konusu:** {latest_module['konu_basligi']}")
         st.info(latest_module['hap_bilgi'])
         if latest_module.get('kaynak_url'):
             st.caption(f"🔗 Kaynak: {latest_module['kaynak_url']}")
     else:
-        st.write("GitHub Actions tarafından taranıp, 6331 ve 4857 mevzuat filtresinden geçen temiz veriler burada olacak.")
+        st.write("GitHub Actions veya Deep Hunter tarafından çekilen veriler burada olacak.")
 
-    # --- İLERLEME ÇUBUKLARI (Mevcut Görsel Yapı Korunmuştur) ---
-    st.subheader("Modül İlerlemeleri")
-    st.write("6331 Sayılı Kanun ve Mevzuat")
-    st.progress(65)
-    st.write("İş Yeri Hekimliği Klinik Tuzaklar")
-    st.progress(40)
+    # --- GERÇEK ZAMANLI DİNAMİK İLERLEME ÇUBUĞU ---
+    st.subheader("Gerçek Zamanlı İlerleme")
+    
+    toplam_modul_sayisi = total_mods
+    basarili_modul_sayisi = 0
+    
+    if supabase:
+        try:
+            il_res = supabase.table("kullanici_ilerleme").select("bagli_modul_id").eq("durum", "gecti").execute()
+            if il_res.data:
+                # set() kullanarak aynı konunun tekrarlanan çözümlerini filtreliyoruz
+                basarili_modul_sayisi = len(set([row["bagli_modul_id"] for row in il_res.data]))
+        except Exception:
+            pass
+            
+    genel_oran = int((basarili_modul_sayisi / toplam_modul_sayisi) * 100) if toplam_modul_sayisi > 0 else 0
+    if genel_oran > 100: genel_oran = 100
+    
+    st.write("📚 Kütüphane Tüketim Oranı (Genel Başarı)")
+    st.progress(genel_oran)
+    st.caption(f"Tamamlanan Benzersiz Konu: **{basarili_modul_sayisi}** / Toplam Cephane: **{toplam_modul_sayisi}**")
 
 with tab2:
     st.header("Meydan Okuma (Ters Köşe Sorular)")
     st.write("Çelişkili 'Şüpheli' notlar veya 3-4 gün önce işlenen konulardan gelen ters köşe testler.")
 
-    # FAZ 9: Adaptif Döngü ve İnteraktif Test Ekranı
     if latest_question:
         with st.expander("🧠 Otonom Botun Günlük Ters Köşe Sorusu", expanded=True):
             st.write(f"**Soru:** {latest_question['soru_metni']}")
@@ -231,7 +221,6 @@ with tab2:
                 latest_question.get('e_sikki', 'E')
             ]
             
-            # Dinamik key eklendi: Yeni soruya geçildiğinde şık seçimi sıfırlansın diye
             kullanici_cevabi = st.radio("Cevabını Seç:", secenekler, index=None, key=f"radio_{latest_question['id']}")
             
             if st.button("Cevapla ve Değerlendir", key=f"btn_{latest_question['id']}"):
@@ -248,7 +237,6 @@ with tab2:
                         durum = "tekrar_gerekli"
                         skor = 0
                     
-                    # Supabase kullanici_ilerleme tablosuna Adaptif Kayıt
                     if supabase:
                         try:
                             supabase.table("kullanici_ilerleme").insert({
@@ -262,22 +250,10 @@ with tab2:
                 else:
                     st.warning("Lütfen bir şık seç!")
             
-            # İnsiyatifli Devam Butonu
             st.markdown("---")
             if st.button("Sıradaki Eğitime Geç ➡️", key=f"next_{latest_question['id']}"):
                 st.session_state.aktif_soru_index += 1
                 st.rerun()
-
-    # --- MEYDAN OKUMA KARTLARI (Mevcut Görsel Yapı Korunmuştur) ---
-    with st.expander("⚠️ Şüpheli Not: Gece Çalışma Süreleri ve Kadın İşçiler"):
-        st.warning("Bu bilgi son taramada çelişkili bulundu. Lütfen mevzuatı doğrula.")
-        st.write("**Gelen Veri:** Kadın işçiler gece postasında 7.5 saatten fazla çalıştırılamaz. (Turizm sektörü hariç)")
-        st.write("**Görev:** Gemini ile bu bilginin 4857 sayılı kanundaki istisnalarını tartış.")
-
-    with st.expander("🧠 Ters Köşe Soru: İSG Kurul Toplantı Periyotları"):
-        st.info("3 gün önce öğrendiğin konunun kalıcılık testi.")
-        st.write("**Soru:** Çok tehlikeli sınıfta yer alan ve 150 çalışanı olan bir iş yerinde İSG kurulu en az hangi sıklıkta toplanmalıdır?")
-        st.write("Cevabını aşağıdaki sohbet alanından mentora ilet.")
 
     if supabase:
         st.success("Supabase hafıza bağlantısı aktif. Geçmiş veriler çekilmeye hazır.")
@@ -296,18 +272,26 @@ with tab4:
     if st.button("🚀 Deep Hunter'ı Ateşle (Yeni Cephane Bul)", use_container_width=True):
         with st.spinner("🕵🏻‍♂️ Deep Hunter internetin derinliklerinde avlanıyor... Lütfen 10-15 saniye bekle."):
             try:
-                # egitim_avcisi.py dosyasını arka planda çalıştır ve logları yakala
-                result = subprocess.run(["python3", "egitim_avcisi.py"], capture_output=True, text=True)
+                import io
+                from contextlib import redirect_stdout
+                from egitim_avcisi import otonom_avci_baslat
                 
-                if result.returncode == 0:
+                # Streamlit Cloud'un Terminal tuzaklarını kökünden çözen yapı (Direkt fonksiyon)
+                f = io.StringIO()
+                with redirect_stdout(f):
+                    otonom_avci_baslat()
+                
+                avci_log = f.getvalue()
+                
+                if "Tamamlandı" in avci_log or "Başarılı" in avci_log:
                     st.success("✅ Operasyon Başarılı! Yeni cephane kütüphaneye yüklendi komutan.")
                     with st.expander("Avcı Raporunu Görüntüle"):
-                        st.code(result.stdout)
+                        st.code(avci_log)
                     st.info("Taze mühimmatı görmek için 'Eksik Kapatma' sekmesindeki 'Sıradaki Eğitime Geç ➡️' butonunu kullanabilirsin.")
                 else:
-                    st.error("🚨 Avcı bir hatayla karşılaştı!")
-                    with st.expander("Hata Detayı"):
-                        st.code(result.stderr)
+                    st.warning("⚠️ Avcı çalıştı ancak log raporunda bir aksilik görünüyor:")
+                    with st.expander("Hata Detayı / Log"):
+                        st.code(avci_log)
             except Exception as e:
                 st.error(f"Sistem Hatası: {str(e)}")
 
@@ -315,12 +299,10 @@ with tab4:
 st.markdown("---")
 st.subheader("🤖 İSG Mentor ile Konuş")
 
-# Hafıza başlatma (Session State) ve Supabase'den geçmişi çekme
 if "messages" not in st.session_state:
     st.session_state.messages = []
     if supabase:
         try:
-            # Önceki sohbetleri veritabanından çek (Son 10 mesaj)
             res = supabase.table("chat_history").select("*").order("created_at", desc=False).limit(10).execute()
             if res.data:
                 for row in res.data:
@@ -328,18 +310,14 @@ if "messages" not in st.session_state:
         except Exception:
             pass
 
-# Ekrandaki eski mesajları çiz
 for msg in st.session_state.messages:
     st.chat_message(msg["role"]).write(msg["content"])
 
 user_input = st.chat_input("6331 sayılı kanun veya klinik tuzaklar hakkında sor...")
 
 if user_input:
-    # Kullanıcı mesajını ekrana bas ve hafızaya al
     st.chat_message("user").write(user_input)
     st.session_state.messages.append({"role": "user", "content": user_input})
-
-    # Veritabanına kaydet
     if supabase:
         try:
             supabase.table("chat_history").insert({"role": "user", "content": user_input}).execute()
@@ -348,13 +326,11 @@ if user_input:
 
     if client_available:
         try:
-            # Geçmiş konuşmaları bağlam (context) olarak Gemini'ye sunmak için birleştir
             context = "Sen bir İş Yeri Hekimliği AI mentorusun. Sadece 6331 sayılı İSG kanunu ve tıbbi mevzuat çerçevesinde net, kısa ve profesyonel cevap ver.\n\nÖnceki Konuşmalar:\n"
-            for m in st.session_state.messages[-5:]: # Son 5 mesajı bağlama ekle ki konuyu hatırlasın
+            for m in st.session_state.messages[-5:]:
                 context += f"{m['role'].capitalize()}: {m['content']}\n"
             context += f"\nGüncel Soru: {user_input}"
 
-            # Yeni nesil açık motorlar ile fallback döngüsü
             calisan_model = None
             hata_mesaji = ""
             modeller_listesi = ["gemini-2.5-flash", "gemini-flash-latest"]
@@ -364,7 +340,7 @@ if user_input:
                     model = genai.GenerativeModel(denenen_model)
                     response = model.generate_content(context)
                     calisan_model = denenen_model
-                    break  # Cevap alındıysa döngüyü kır
+                    break
                 except Exception as e:
                     hata_mesaji = str(e)
                     continue
@@ -373,17 +349,14 @@ if user_input:
                 bot_reply = response.text
                 st.chat_message("assistant").write(bot_reply)
                 st.session_state.messages.append({"role": "assistant", "content": bot_reply})
-
-                # Asistan cevabını veritabanına kaydet
                 if supabase:
                     try:
                         supabase.table("chat_history").insert({"role": "assistant", "content": bot_reply}).execute()
                     except Exception:
                         pass
             else:
-                st.chat_message("assistant").error(f"API Hatası (Yeni Nesil Motorlar): {hata_mesaji}")
-
+                st.chat_message("assistant").error(f"API Hatası: {hata_mesaji}")
         except Exception as e:
             st.chat_message("assistant").error(f"Sistem Hatası: {e}")
     else:
-        st.chat_message("assistant").error("Sistem Uyarısı: GEMINI_API_KEY çevresel değişkeni bulunamadı. Lütfen dış bulut ayarlarından veya terminalden anahtarı tanımla.")
+        st.chat_message("assistant").error("Sistem Uyarısı: GEMINI_API_KEY eksik.")
