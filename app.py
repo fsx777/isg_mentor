@@ -33,9 +33,22 @@ if SUPABASE_URL and SUPABASE_KEY:
 else:
     supabase = None
 
-# Hafıza başlatma: İnsiyatifli Devam ve Karma Modu için İndeks
+# Hafıza başlatma: Kalıcı Bellek (Supabase Senkronizasyonu)
 if "aktif_soru_index" not in st.session_state:
-    st.session_state.aktif_soru_index = 0
+    kaldigi_yer = 0
+    if supabase:
+        try:
+            # Veritabanından başarıyla geçilmiş ('gecti') soruların sayısını alıyoruz
+            res = supabase.table("kullanici_ilerleme").select("id", count="exact").eq("durum", "gecti").execute()
+            
+            # Supabase-py versiyonuna göre count'u yakalama:
+            if hasattr(res, 'count') and res.count is not None:
+                kaldigi_yer = res.count
+            elif res.data:
+                kaldigi_yer = len(res.data)
+        except Exception as e:
+            pass
+    st.session_state.aktif_soru_index = kaldigi_yer
 
 # 2. ÖSYM Radarı ve İvedi Uyarı Sistemi
 def check_osym_radar():
