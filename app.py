@@ -236,15 +236,25 @@ with tab2:
             
             if st.button("Cevapla ve Değerlendir", key=f"btn_{latest_question['id']}"):
                 if kullanici_cevabi:
-                    if kullanici_cevabi == latest_question['dogru_cevap']:
+                    # Gelişmiş esnek karşılaştırma (Gizli boşlukları ve tek harf senaryolarını tolere eder)
+                    beklenen = str(latest_question.get('dogru_cevap', '')).strip()
+                    
+                    # Eğer sistem doğru cevabı sadece 'A, B, C, D, E' diye kaydettiyse, o şıkkın metnini çek
+                    if beklenen in ['A', 'B', 'C', 'D', 'E']:
+                        beklenen = str(latest_question.get(f"{beklenen.lower()}_sikki", beklenen)).strip()
+                    
+                    secilen = str(kullanici_cevabi).strip()
+                    
+                    # Eğer metinler birebir aynıysa VEYA biri diğerinin içinde geçiyorsa doğru kabul et
+                    if secilen == beklenen or secilen in beklenen or beklenen in secilen:
                         st.success("✅ Tebrikler! Doğru cevap.")
-                        st.info(f"**Açıklama:** {latest_question['cozum_aciklamasi']}")
+                        st.info(f"**Açıklama:** {latest_question.get('cozum_aciklamasi', '')}")
                         durum = "gecti"
                         skor = 100
                     else:
                         st.error("❌ Yanlış cevap.")
-                        st.warning(f"**Doğru Cevap:** {latest_question['dogru_cevap']}")
-                        st.info(f"**Neden?** {latest_question['cozum_aciklamasi']}")
+                        st.warning(f"**Doğru Cevap:** {beklenen}")
+                        st.info(f"**Neden?** {latest_question.get('cozum_aciklamasi', '')}")
                         durum = "tekrar_gerekli"
                         skor = 0
                     
