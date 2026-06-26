@@ -139,31 +139,30 @@ if supabase:
                             model = genai.GenerativeModel("gemini-2.5-flash")
                             response = model.generate_content(prompt)
                             text_resp = response.text.strip()
-                                                        q_dict = {}
-                                                        
-                                                        # Regex ile çok satırlı blokları eksiksiz yakalama
-                                                        match_soru = re.search(r'SORU:\s*(.*?)(?=\nA:|\Z)', text_resp, re.DOTALL)
-                                                        match_a = re.search(r'A:\s*(.*?)(?=\nB:|\Z)', text_resp, re.DOTALL)
-                                                        match_b = re.search(r'B:\s*(.*?)(?=\nC:|\Z)', text_resp, re.DOTALL)
-                                                        match_c = re.search(r'C:\s*(.*?)(?=\nD:|\Z)', text_resp, re.DOTALL)
-                                                        match_d = re.search(r'D:\s*(.*?)(?=\nE:|\Z)', text_resp, re.DOTALL)
-                                                        match_e = re.search(r'E:\s*(.*?)(?=\nCEVAP:|\Z)', text_resp, re.DOTALL)
-                                                        match_cevap = re.search(r'CEVAP:\s*([A-E])', text_resp)
-                                                        match_aciklama = re.search(r'ACIKLAMA:\s*(.*)', text_resp, re.DOTALL)
-                            
-                                                        if match_soru: q_dict['soru_metni'] = match_soru.group(1).strip()
-                                                        if match_a: q_dict['a_sikki'] = match_a.group(1).strip()
-                                                        if match_b: q_dict['b_sikki'] = match_b.group(1).strip()
-                                                        if match_c: q_dict['c_sikki'] = match_c.group(1).strip()
-                                                        if match_d: q_dict['d_sikki'] = match_d.group(1).strip()
-                                                        if match_e: q_dict['e_sikki'] = match_e.group(1).strip()
-                                                        
-                                                        if match_cevap:
-                                                            cevap_harf = match_cevap.group(1).strip()
-                                                            harf_map = {"A": q_dict.get('a_sikki'), "B": q_dict.get('b_sikki'), "C": q_dict.get('c_sikki'), "D": q_dict.get('d_sikki'), "E": q_dict.get('e_sikki')}
-                                                            q_dict['dogru_cevap'] = harf_map.get(cevap_harf, q_dict.get('a_sikki'))
-                                                            
-                                                        if match_aciklama: q_dict['cozum_aciklamasi'] = match_aciklama.group(1).strip()
+                            q_dict = {}
+
+                            match_soru = re.search(r'SORU:\s*(.*?)(?=\nA:|\Z)', text_resp, re.DOTALL)
+                            match_a = re.search(r'A:\s*(.*?)(?=\nB:|\Z)', text_resp, re.DOTALL)
+                            match_b = re.search(r'B:\s*(.*?)(?=\nC:|\Z)', text_resp, re.DOTALL)
+                            match_c = re.search(r'C:\s*(.*?)(?=\nD:|\Z)', text_resp, re.DOTALL)
+                            match_d = re.search(r'D:\s*(.*?)(?=\nE:|\Z)', text_resp, re.DOTALL)
+                            match_e = re.search(r'E:\s*(.*?)(?=\nCEVAP:|\Z)', text_resp, re.DOTALL)
+                            match_cevap = re.search(r'CEVAP:\s*([A-E])', text_resp)
+                            match_aciklama = re.search(r'ACIKLAMA:\s*(.*)', text_resp, re.DOTALL)
+
+                            if match_soru: q_dict['soru_metni'] = match_soru.group(1).strip()
+                            if match_a: q_dict['a_sikki'] = match_a.group(1).strip()
+                            if match_b: q_dict['b_sikki'] = match_b.group(1).strip()
+                            if match_c: q_dict['c_sikki'] = match_c.group(1).strip()
+                            if match_d: q_dict['d_sikki'] = match_d.group(1).strip()
+                            if match_e: q_dict['e_sikki'] = match_e.group(1).strip()
+
+                            if match_cevap:
+                                cevap_harf = match_cevap.group(1).strip()
+                                harf_map = {"A": q_dict.get('a_sikki'), "B": q_dict.get('b_sikki'), "C": q_dict.get('c_sikki'), "D": q_dict.get('d_sikki'), "E": q_dict.get('e_sikki')}
+                                q_dict['dogru_cevap'] = harf_map.get(cevap_harf, q_dict.get('a_sikki'))
+    
+                            if match_aciklama: q_dict['cozum_aciklamasi'] = match_aciklama.group(1).strip()
                             
                             q_dict['id'] = f"dinamik_{st.session_state.aktif_soru_index}"
                             if 'soru_metni' in q_dict and 'dogru_cevap' in q_dict:
